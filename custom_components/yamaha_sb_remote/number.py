@@ -80,7 +80,7 @@ class SoundbarNumber(NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Update the current value."""
         ble_connect = BleData(self, self.hass, self._macAdress)
-        stepNumber = int(value) - self._attr_native_value
+        stepNumber = int(round(value - self._attr_native_value))
         if stepNumber >= 0:
             for i in range(stepNumber):
                 await ble_connect.callDevice(["subUp"])
