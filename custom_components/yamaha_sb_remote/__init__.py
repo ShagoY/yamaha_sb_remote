@@ -17,7 +17,7 @@ SUPPORTED_DOMAINS = ["media_player", "switch", "number", "select"]
 # VERSION = '0.1.0'
 
 # DOMAIN
-DOMAIN = "yamaha_sb_remote"
+DOMAIN = "yamaha"
 
 DEVICE_MANUFACTURER = "YAMAHA"
 
