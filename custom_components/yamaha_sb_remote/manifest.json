@@ -1,5 +1,5 @@
 {
-    "domain": "yamaha",
+    "domain": "yamaha_sb_remote",
     "name": "Yamaha Soundbar Remote",
     "codeowners": ["@shagoy"],
     "config_flow": true,
