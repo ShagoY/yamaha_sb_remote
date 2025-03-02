@@ -25,7 +25,7 @@ class SoundbarLed(SelectEntity):
         self._service_name = config.data[CONF_NAME]
         self._macAdress = config.data["mac_adress"]
         self._device_id = config.entry_id
-        self._name = config.data[CONF_NAME] + "_led"
+        self._name = config.data[CONF_NAME] + " Led"
         self._pollingAuto = config.data["polling_auto"]
         self._status = "unint"
         self._attr_current_option = None
