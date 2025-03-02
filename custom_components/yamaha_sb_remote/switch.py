@@ -30,7 +30,7 @@ class SoundbarSwitch(SwitchEntity):
         self._service_name = config.data[CONF_NAME]
         self._macAdress = config.data["mac_adress"]
         self._device_id = config.entry_id
-        self._name = config.data[CONF_NAME] + "_" + switch
+        self._name = config.data[CONF_NAME] + " " + switch.replace("_", " ").title()
         self._pollingAuto = config.data["polling_auto"]
         self._power = None
         self._status = "unint"
