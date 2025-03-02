@@ -25,7 +25,7 @@ class SoundbarNumber(NumberEntity):
         self.hass = hass
         self._macAdress = config.data["mac_adress"]
         self._device_id = config.entry_id
-        self._name = config.data[CONF_NAME] + "_subwoofer"
+        self._name = config.data[CONF_NAME] + " Subwoofer"
         self._pollingAuto = config.data["polling_auto"]
         self._status = "unint"
         self._attr_native_max_value = 4
