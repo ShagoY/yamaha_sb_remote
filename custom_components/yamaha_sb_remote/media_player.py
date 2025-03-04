@@ -32,7 +32,7 @@ class YamahaMediaPlayer(MediaPlayerEntity):
         | MediaPlayerEntityFeature.SELECT_SOURCE
     )
     _attr_device_class = MediaPlayerDeviceClass.SPEAKER
-    _attr_has_entity_name = false
+    _attr_has_entity_name = False
     _attr_name = None
 
     def __init__(self, hass, config):
