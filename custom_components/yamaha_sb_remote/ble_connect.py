@@ -75,7 +75,7 @@ class BleData:
         except Exception as err:
             # Handling ESP_GATT_CONN_FAIL_ESTABLISH and Disconnected errors by retrying the connection and command
             if ("ESP_GATT_CONN_FAIL_ESTABLISH" in str(err) or "Disconnected" in str(err)) and retries > 0:
-                _LOGGER.error("Error detected (%s), retrying in 0.5s. Remaining retries: %d, attempt: %d", str(err), retries, attempt+1)
+                _LOGGER.debug("Error detected (%s), retrying in 0.5s. Remaining retries: %d, attempt: %d", str(err), retries, attempt+1)
                 await asyncio.sleep(0.5)
                 return await self.callDevice(command, retries=retries-1, attempt=attempt+1)
             else:
