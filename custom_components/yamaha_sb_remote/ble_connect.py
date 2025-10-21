@@ -1,7 +1,14 @@
 import asyncio
-from bleak import BleakScanner, BleakClient, BleakError
 import logging
+
+from bleak_retry_connector import (
+    BleakClientWithServiceCache,
+    establish_connection,
+    close_stale_connections,
+    close_stale_connections_by_address,  # fallback
+)
 from homeassistant.components import bluetooth
+
 from .utils import *
 
 _LOGGER = logging.getLogger(__name__)
@@ -43,41 +50,87 @@ class BleData:
             _LOGGER.debug("Bad handle: %s" % str(handle))
 
     async def callDevice(self, command=None, retries=3, attempt=0):
-        # Sends a BLE command to the device with retry logic and delays to prevent saturation.
+        """Send a BLE command to the device with robust connection and bounded retries."""
         request = create_command_code(['request'], self.device)
-        bleDevice = bluetooth.async_ble_device_from_address(self.hass, self.macAdress, connectable=True)
+
+        # Resolve the BLE device via HA's bluetooth integration
+        bleDevice = bluetooth.async_ble_device_from_address(
+            self.hass, self.macAdress, connectable=True
+        )
+
         try:
-            async with BleakClient(bleDevice) as adapter:
-                await adapter.start_notify('5cafe9de-e7b0-4e0b-8fb9-2da91a7ae3ed', self.handle_data)
-                await adapter.write_gatt_char("0c50e7fa-594c-408b-ae0d-b53b884b7c08", request)
-                
-                # Log: initial request command sent successfully
+            # Helpful on some stacks (e.g. BlueZ) to avoid lingering "ghost" connections
+            if bleDevice is not None:
+                await close_stale_connections(bleDevice)
+            else:
+                await close_stale_connections_by_address(self.macAdress)  # Fallback
+
+            # Use bleak-retry-connector for a reliable connection and service cache
+            target = bleDevice if bleDevice is not None else self.macAdress
+            adapter = await establish_connection(
+                BleakClientWithServiceCache,
+                target,  # can be a BLEDevice or a MAC address
+                name=getattr(self.device, "_name", "Yamaha Soundbar"),
+                # Keep connector-level attempts small; we also have an outer retry
+                max_attempts=3,
+            )
+
+            try:
+                # Subscribe to notifications so the device status gets updated
+                await adapter.start_notify(
+                    "5cafe9de-e7b0-4e0b-8fb9-2da91a7ae3ed", self.handle_data
+                )
+
+                # Send initial "request" to prime state
+                await adapter.write_gatt_char(
+                    "0c50e7fa-594c-408b-ae0d-b53b884b7c08", request
+                )
                 _LOGGER.debug("Initial request command sent successfully")
-                
-                # Wait for device initialization
-                while self.device._status == 'unint':
-                    _LOGGER.debug("WAIT FOR notify handle : " + self.device._status)
+
+                # Wait for device to finish initialization (status set via notifications)
+                while self.device._status == "unint":
+                    _LOGGER.debug("WAIT FOR notify handle: %s", self.device._status)
                     await asyncio.sleep(0.06)
-                
-                # Added delay after request to avoid BLE saturation
+
+                # Small delay to avoid saturating the BLE stack
                 await asyncio.sleep(0.3)
-                
+
+                # If no additional command to send, we're done
                 if command is None:
                     return
-                else:
-                    _LOGGER.info("Sending BLE command: " + command[0])
-                    code = create_command_code(command, self.device)
-                    await adapter.write_gatt_char("0c50e7fa-594c-408b-ae0d-b53b884b7c08", code)
-                    # Added delay after sending command to prevent rapid re-connections
-                    await asyncio.sleep(1)
-                    # Log: custom command sent successfully
-                    _LOGGER.info("BLE command '%s' sent successfully", command[0])
+
+                # Send the requested command
+                _LOGGER.info("Sending BLE command: %s", command[0])
+                code = create_command_code(command, self.device)
+                await adapter.write_gatt_char(
+                    "0c50e7fa-594c-408b-ae0d-b53b884b7c08", code
+                )
+
+                # Brief delay to prevent rapid reconnect cycles after commands
+                await asyncio.sleep(1)
+                _LOGGER.info("BLE command '%s' sent successfully", command[0])
+
+            finally:
+                # Always attempt a clean disconnect; ignore teardown errors
+                try:
+                    await adapter.disconnect()
+                except Exception:
+                    pass
+
         except Exception as err:
-            # Handling ESP_GATT_CONN_FAIL_ESTABLISH and Disconnected errors by retrying the connection and command
-            if ("ESP_GATT_CONN_FAIL_ESTABLISH" in str(err) or "Disconnected" in str(err)) and retries > 0:
-                _LOGGER.debug("Error detected (%s), retrying in 0.5s. Remaining retries: %d, attempt: %d", str(err), retries, attempt+1)
+            # App-level retry in addition to the connector's internal attempts
+            if (
+                ("ESP_GATT_CONN_FAIL_ESTABLISH" in str(err) or "Disconnected" in str(err))
+                and retries > 0
+            ):
+                _LOGGER.debug(
+                    "Error detected (%s), retrying in 0.5s. Remaining retries: %d, attempt: %d",
+                    str(err), retries, attempt + 1,
+                )
                 await asyncio.sleep(0.5)
-                return await self.callDevice(command, retries=retries-1, attempt=attempt+1)
+                return await self.callDevice(
+                    command, retries=retries - 1, attempt=attempt + 1
+                )
             else:
                 _LOGGER.error("Error sending BLE command: %s", err)
                 await asyncio.sleep(0.5)
